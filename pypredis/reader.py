@@ -36,6 +36,8 @@ class RedisError(Exception):
     pass
 
 class RedisReader(object):
+    "Hiredis wrapper"
+
     REDIS_ERR = -1
     REDIS_OK = 0
 
