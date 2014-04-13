@@ -15,10 +15,10 @@ Then it sends all messages and waits for all responses.
 
 This results in CPU spikes on single instances, and prevents efficient multicore utilisation.
 
-txRedis would allow non-blockint pipelining, but due to its single-threaded nature
+txRedis would allow non-blocking pipelining, but due to its single-threaded nature
 is not suitable for CPU-intensive work.
 
-PypRedis uses an API based on futures, and works by running your commands on a non-blockint IO thread.
+PypRedis uses an API based on futures, and works by running your commands on a non-blocking IO thread.
 This allows you to pipeline in any way you want, attach callbacks, or block on the result.
 
 PypRedis works on PyPy and uses the Hiredis parser.
