@@ -24,3 +24,25 @@ This allows you to pipeline in any way you want, attach callbacks, or block on t
 PypRedis works on PyPy and uses the Hiredis parser.
 
 Very alpha. No support for TCP/IP or Python 3. Patches welcome.
+
+Usage
+-----
+
+Currently quite low-level.
+
+```python
+In [1]: import pypredis.client
+
+In [2]: e = pypredis.client.EventLoop()
+
+In [3]: e.start()
+
+In [4]: e.send_command("/tmp/redis.sock", "SET", "A", "foo").result()
+Out[4]: 'OK'
+
+In [5]: e.send_command("/tmp/redis.sock", "SET", "B", "bar").result()
+Out[5]: 'OK'
+
+In [6]: e.send_command("/tmp/redis.sock", "MGET", "A", "B").result()
+Out[6]: ['foo', 'bar']
+```
