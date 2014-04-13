@@ -80,6 +80,7 @@ class RedisReader(object):
         if res == self.REDIS_ERR:
             raise RedisError("Error reading")
 
+    def get_reply(self):
         reply_pointer = ffi.new("redisReply * *")
         res = hiredis.redisReaderGetReply(self.hiredis, reply_pointer)
         if res == self.REDIS_ERR:
@@ -89,6 +90,4 @@ class RedisReader(object):
         if reply:
             gc_reply = ffi.gc(reply, hiredis.freeReplyObject)
             return self.to_py(gc_reply)
-        else:
-            return False
 
