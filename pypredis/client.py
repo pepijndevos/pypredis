@@ -31,9 +31,9 @@ RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
 class BaseConnection(object):
 
-    def __init__(self):
+    def __init__(self, buf_size=1000000):
         self.sock = None
-        self.buf = SendBuffer()
+        self.buf = SendBuffer(buf_size)
         self.resq = deque()
         self.reader = RedisReader()
 
@@ -46,8 +46,8 @@ class BaseConnection(object):
         return bool(self.resq)
 
     def write(self, cmd):
-        self.buf.write(cmd.command)
         self.resq.append(cmd.result)
+        self.buf.write(cmd.command)
 
     def pump_out(self):
         data = self.buf.peek()
@@ -67,8 +67,8 @@ class BaseConnection(object):
 
 class UnixConnection(BaseConnection):
 
-    def __init__(self, path):
-        BaseConnection.__init__(self)
+    def __init__(self, path, **options):
+        BaseConnection.__init__(self, **options)
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.setblocking(0)
         self.sock.connect(path)
@@ -88,6 +88,7 @@ class EventLoop(Thread):
         cmdstr = pack_command(args)
         res = Future()
         cmd = RedisCommand(res, conn, cmdstr)
+        conn.write(cmd)
         self.queue.put(cmd)
         return res
 
@@ -99,11 +100,6 @@ class EventLoop(Thread):
     def _unregister(self, fd):
         self.poll.unregister(fd)
         del self.fd_index[fd]
-
-    def _read_commands(self, commands):
-        for cmd in commands:
-            self._register(cmd.connection)
-            cmd.connection.write(cmd)
 
     def _handle_events(self, events):
         for fd, e in events:
@@ -125,7 +121,8 @@ class EventLoop(Thread):
     def run(self):
         while True:
             commands = drain(self.queue)
-            self._read_commands(commands)
+            for cmd in commands:
+                self._register(cmd.connection)
 
             events = self.poll.poll(self.timeout)
             self._handle_events(events)
