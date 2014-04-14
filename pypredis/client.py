@@ -20,12 +20,6 @@ def pack_command(args):
         ('*', str(len(args)), '\r\n', args_output))
     return output
 
-def connect_unix(path):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.setblocking(0)
-    s.connect(path)
-    return s
-
 def drain(q):
     while True:
         try:
@@ -33,9 +27,54 @@ def drain(q):
         except Empty:
             break
 
-class EventLoop(Thread):
+RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
-    RedisCommand = namedtuple("RedisCommand", ["result", "sockpath", "command"])
+class BaseConnection(object):
+
+    def __init__(self):
+        self.sock = None
+        self.buf = SendBuffer()
+        self.resq = deque()
+        self.reader = RedisReader()
+
+    @property
+    def fd(self):
+        return self.sock.fileno()
+
+    @property
+    def waiting(self):
+        return bool(self.resq)
+
+    def write(self, cmd):
+        self.buf.write(cmd.command)
+        self.resq.append(cmd.result)
+
+    def pump_out(self):
+        data = self.buf.peek()
+        if data:
+            n = self.sock.send(data)
+            self.buf.written(n)
+    
+    def pump_in(self):
+        data = self.sock.recv(4096)
+        self.reader.feed(data)
+        while True:
+            reply = self.reader.get_reply()
+            if not reply:
+                break
+            res = self.resq.popleft()
+            res.set_result(reply)
+
+class UnixConnection(BaseConnection):
+
+    def __init__(self, path):
+        BaseConnection.__init__(self)
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.setblocking(0)
+        self.sock.connect(path)
+
+
+class EventLoop(Thread):
     
     def __init__(self):
         Thread.__init__(self)
@@ -43,33 +82,28 @@ class EventLoop(Thread):
         self.queue = Queue()
         self.timeout = 0.1
         self.poll = poll()
-        self.socks = {}
         self.fd_index = {}
-        self.buffers = defaultdict(SendBuffer)
-        self.results = defaultdict(deque)
-        self.readers = defaultdict(RedisReader)
 
-    def send_command(self, path, *args):
+    def send_command(self, conn, *args):
         cmdstr = pack_command(args)
         res = Future()
-        cmd = self.RedisCommand(res, path, cmdstr)
+        cmd = RedisCommand(res, conn, cmdstr)
         self.queue.put(cmd)
         return res
 
-    def _get_or_create_socket(self, path):
-        if path not in self.socks:
-            sock = connect_unix(path)
-            self.poll.register(sock)
-            self.socks[path] = sock
-            self.fd_index[sock.fileno()] = sock
+    def _register(self, conn):
+        if conn.fd not in self.fd_index:
+            self.poll.register(conn.fd)
+            self.fd_index[conn.fd] = conn
 
-        return self.socks[path]
+    def _unregister(self, fd):
+        self.poll.unregister(fd)
+        del self.fd_index[fd]
 
     def _read_commands(self, commands):
         for cmd in commands:
-            sock = self._get_or_create_socket(cmd.sockpath)
-            self.buffers[sock.fileno()].write(cmd.command)
-            self.results[sock.fileno()].append(cmd.result)
+            self._register(cmd.connection)
+            cmd.connection.write(cmd)
 
     def _handle_events(self, events):
         for fd, e in events:
@@ -77,32 +111,16 @@ class EventLoop(Thread):
                 self._handle_writes(fd)
             if e & (POLLIN | POLLPRI):
                 self._handle_reads(fd)
-                self._deliver_replies(fd)
 
     def _handle_writes(self, fd):
-        sock = self.fd_index[fd]
-        buf = self.buffers[fd]
-        data = buf.peek()
-        if data:
-            n = sock.send(data)
-            buf.written(n)
+        conn = self.fd_index[fd]
+        conn.pump_out()
 
     def _handle_reads(self, fd):
-        sock = self.fd_index[fd]
-        reader = self.readers[fd]
-        data = sock.recv(4096)
-        reader.feed(data)
-
-    def _deliver_replies(self, fd):
-        reader = self.readers[fd]
-        resq = self.results[fd]
-        while True:
-            reply = reader.get_reply()
-            if not reply:
-                break
-            res = resq.popleft()
-            res.set_result(reply)
-
+        conn = self.fd_index[fd]
+        conn.pump_in()
+        if not conn.waiting:
+            self._unregister(fd)
 
     def run(self):
         while True:

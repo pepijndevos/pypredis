@@ -32,17 +32,13 @@ Currently quite low-level.
 
 ```python
 In [1]: import pypredis.client
-
-In [2]: e = pypredis.client.EventLoop()
-
-In [3]: e.start()
-
-In [4]: e.send_command("/tmp/redis.sock", "SET", "A", "foo").result()
-Out[4]: 'OK'
-
-In [5]: e.send_command("/tmp/redis.sock", "SET", "B", "bar").result()
-Out[5]: 'OK'
-
-In [6]: e.send_command("/tmp/redis.sock", "MGET", "A", "B").result()
-Out[6]: ['foo', 'bar']
+In [2]: c = pypredis.client.UnixConnection('/tmp/redis.sock')
+In [3]: e = pypredis.client.EventLoop()
+In [4]: e.start()
+In [6]: e.send_command(c, "SET", "A", "B").result()
+Out[6]: 'OK'
+In [7]: e.send_command(c, "SET", "B", "C").result()
+Out[7]: 'OK'
+In [8]: e.send_command(c, "MGET", "A", "B").result()
+Out[8]: ['B', 'C']
 ```
