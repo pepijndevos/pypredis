@@ -60,7 +60,7 @@ class BaseConnection(object):
         self.reader.feed(data)
         while True:
             reply = self.reader.get_reply()
-            if not reply:
+            if reply == False:
                 break
             res = self.resq.popleft()
             res.set_result(reply)

@@ -10,17 +10,21 @@ class SendBuffer(object):
         self.full = Condition()
 
     def __len__(self):
-        return len(self.buf) - self.mark
+        with self.full:
+            return len(self.buf) - self.mark
 
 
     def write(self, data):
         with self.full:
             while len(self) + len(data) > self.max_size:
+                # wait until data is written
                 self.full.wait()
+
             self.buf.fromstring(data)
 
     def peek(self):
-        return memoryview(self.buf)[self.mark:]
+        with self.full:
+            return memoryview(self.buf)[self.mark:]
 
     def written(self, n):
         with self.full:
@@ -30,3 +34,6 @@ class SendBuffer(object):
             if self.mark >= len(self.buf):
                 self.mark = 0
                 self.buf = array('c')
+            elif self.mark >= self.max_size:
+                self.buf = self.buf[self.mark:]
+                self.mark = 0

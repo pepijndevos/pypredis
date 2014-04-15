@@ -90,4 +90,6 @@ class RedisReader(object):
         if reply:
             gc_reply = ffi.gc(reply, hiredis.freeReplyObject)
             return self.to_py(gc_reply)
+        else:
+            return False
 
