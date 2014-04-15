@@ -7,6 +7,7 @@ from Queue import Queue, Empty
 from collections import defaultdict, namedtuple, deque
 from threading import Thread
 import socket
+import os
 
 #debug
 from time import sleep
@@ -31,11 +32,14 @@ RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
 class BaseConnection(object):
 
-    def __init__(self, buf_size=1000000):
+    def __init__(self, buf_size=1000000, **connect_params):
         self.sock = None
         self.buf = SendBuffer(buf_size)
         self.resq = deque()
         self.reader = RedisReader()
+        self.pid = os.getpid()
+        self.connect_params = connect_params
+        self.connect(**connect_params)
 
     @property
     def fd(self):
@@ -44,6 +48,14 @@ class BaseConnection(object):
     @property
     def waiting(self):
         return bool(self.resq)
+
+    def checkpid(self):
+        if self.pid != os.getpid():
+            self.disconnect()
+            self.connect(**self.connect_params)
+
+    def disconnect(self):
+        self.sock.close()
 
     def write(self, cmd):
         self.resq.append(cmd.result)
@@ -76,11 +88,10 @@ class BaseConnection(object):
 
 class UnixConnection(BaseConnection):
 
-    def __init__(self, path, **options):
-        BaseConnection.__init__(self, **options)
+    def connect(self, path):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.setblocking(0)
         self.sock.connect(path)
+        self.sock.setblocking(0)
 
 
 class EventLoop(Thread):
@@ -103,6 +114,7 @@ class EventLoop(Thread):
 
     def _register(self, conn):
         if conn.fd not in self.fd_index:
+            conn.checkpid()
             self.poll.register(conn.fd)
             self.fd_index[conn.fd] = conn
 
