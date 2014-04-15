@@ -32,7 +32,7 @@ hiredis = ffi.verify("""
     ],
     include_dirs=["hiredis"])
 
-class RedisError(Exception):
+class HiredisError(Exception):
     pass
 
 class RedisReader(object):
@@ -73,12 +73,12 @@ class RedisReader(object):
         elif reply.type == self.REDIS_REPLY_STATUS:
             return ffi.buffer(reply.str, reply.len)[:]
         elif reply.type == self.REDIS_REPLY_ERROR:
-            raise RedisError(ffi.buffer(reply.str, reply.len)[:])
+            raise HiredisError(ffi.buffer(reply.str, reply.len)[:])
 
     def feed(self, data):
         res = hiredis.redisReaderFeed(self.hiredis, data, len(data))
         if res == self.REDIS_ERR:
-            raise RedisError("Error reading")
+            raise HiredisError("Error reading")
 
     def get_reply(self):
         reply_pointer = ffi.new("redisReply * *")

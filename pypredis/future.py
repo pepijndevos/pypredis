@@ -25,6 +25,12 @@ class Future(object):
         else:
             raise TimeoutError()
 
+    def exception(self, timeout=None):
+        if self.event.wait(timeout):
+            return self._exception
+        else:
+            raise TimeoutError()
+
     def add_done_callback(self, cb):
         with self.lock:
             if self.event.is_set():

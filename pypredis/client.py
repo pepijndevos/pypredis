@@ -50,20 +50,29 @@ class BaseConnection(object):
         self.buf.write(cmd.command)
 
     def pump_out(self):
-        data = self.buf.peek()
-        if data:
-            n = self.sock.send(data)
-            self.buf.written(n)
+        try:
+            data = self.buf.peek()
+            if data:
+                n = self.sock.send(data)
+                self.buf.written(n)
+        except Exception as e:
+            res = self.resq.popleft()
+            res.set_exception(e)
+
     
     def pump_in(self):
-        data = self.sock.recv(4096)
-        self.reader.feed(data)
-        while True:
-            reply = self.reader.get_reply()
-            if reply == False:
-                break
+        try:
+            data = self.sock.recv(4096)
+            self.reader.feed(data)
+            while True:
+                reply = self.reader.get_reply()
+                if reply == False:
+                    break
+                res = self.resq.popleft()
+                res.set_result(reply)
+        except Exception as e:
             res = self.resq.popleft()
-            res.set_result(reply)
+            res.set_exception(e)
 
 class UnixConnection(BaseConnection):
 
