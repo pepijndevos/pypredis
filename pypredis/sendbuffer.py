@@ -16,7 +16,7 @@ class SendBuffer(object):
 
     def write(self, data):
         with self.full:
-            while len(self) + len(data) > self.max_size:
+            while len(self) >= self.max_size:
                 # wait until data is written
                 self.full.wait()
 
