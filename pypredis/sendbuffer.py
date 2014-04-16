@@ -24,7 +24,7 @@ class SendBuffer(object):
 
     def peek(self):
         with self.full:
-            return memoryview(self.buf)[self.mark:]
+            return buffer(self.buf, self.mark)
 
     def written(self, n):
         with self.full:
