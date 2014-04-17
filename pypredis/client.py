@@ -83,6 +83,12 @@ class UnixConnection(BaseConnection):
         self.sock.connect(path)
         self.sock.setblocking(0)
 
+class TCPConnection(BaseConnection):
+
+    def connect(self, host='localhost', port=6379):
+        self.sock = socket.create_connection((host, port))
+        self.sock.setblocking(0)
+
 
 class EventLoop(Thread):
     
