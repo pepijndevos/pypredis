@@ -21,13 +21,6 @@ def pack_command(args):
         ('*', str(len(args)), '\r\n', args_output))
     return output
 
-def drain(q):
-    while True:
-        try:
-            yield q.get_nowait()
-        except Empty:
-            break
-
 RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
 class BaseConnection(object):
@@ -110,6 +103,7 @@ class EventLoop(Thread):
         cmd = RedisCommand(res, conn, cmdstr)
         conn.write(cmd)
         self.queue.put(cmd)
+        cmd = None
         return res
 
     def _register(self, conn):
@@ -141,9 +135,13 @@ class EventLoop(Thread):
 
     def run(self):
         while True:
-            commands = drain(self.queue)
-            for cmd in commands:
-                self._register(cmd.connection)
+            while True:
+                try:
+                    cmd = self.queue.get_nowait()
+                    self._register(cmd.connection)
+                    cmd = None
+                except Empty:
+                    break # only inner
 
             events = self.poll.poll(self.timeout)
             self._handle_events(events)
