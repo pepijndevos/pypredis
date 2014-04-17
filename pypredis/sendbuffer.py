@@ -9,6 +9,9 @@ class SendBuffer(object):
         self.current = ''
         self.buf = Queue(max_size)
 
+    def __len__(self):
+        return self.buf.qsize() + int(bool(self.current))
+
     def write(self, data):
         self.buf.put(data)
 

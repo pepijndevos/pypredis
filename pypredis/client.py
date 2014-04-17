@@ -39,8 +39,14 @@ class BaseConnection(object):
         return self.sock.fileno()
 
     @property
-    def waiting(self):
-        return bool(self.resq)
+    def flags(self):
+        flags = 0
+        if self.buf:
+            flags |= POLLOUT
+        if self.resq:
+            flags |= POLLIN
+            flags |= POLLPRI
+        return flags
 
     def checkpid(self):
         if self.pid != os.getpid():
@@ -110,31 +116,26 @@ class EventLoop(Thread):
         return res
 
     def _register(self, conn):
-        if conn.fd not in self.fd_index:
-            conn.checkpid()
-            self.poll.register(conn.fd)
-            self.fd_index[conn.fd] = conn
+        conn.checkpid()
+        self.poll.register(conn.fd, conn.flags)
+        self.fd_index[conn.fd] = conn
 
-    def _unregister(self, fd):
-        self.poll.unregister(fd)
-        del self.fd_index[fd]
+    def _unregister(self, conn):
+        self.poll.unregister(conn.fd)
+        del self.fd_index[conn.fd]
 
     def _handle_events(self, events):
         for fd, e in events:
+            conn = self.fd_index[fd]
             if e & POLLOUT:
-                self._handle_writes(fd)
+                conn.pump_out()
             if e & (POLLIN | POLLPRI):
-                self._handle_reads(fd)
+                conn.pump_in()
 
-    def _handle_writes(self, fd):
-        conn = self.fd_index[fd]
-        conn.pump_out()
-
-    def _handle_reads(self, fd):
-        conn = self.fd_index[fd]
-        conn.pump_in()
-        if not conn.waiting:
-            self._unregister(fd)
+            if conn.flags:
+                self.poll.register(conn.fd, conn.flags)
+            else:
+                self._unregister(conn)
 
     def run(self):
         while True:
