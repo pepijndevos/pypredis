@@ -25,7 +25,7 @@ RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
 class BaseConnection(object):
 
-    def __init__(self, buf_size=1000000, **connect_params):
+    def __init__(self, buf_size=100, **connect_params):
         self.sock = None
         self.buf = SendBuffer(buf_size)
         self.resq = deque()

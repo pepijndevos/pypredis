@@ -1,5 +1,6 @@
 from threading import Condition
 from Queue import Queue, Empty
+from cStringIO import StringIO
 
 class SendBuffer(object):
 
@@ -13,9 +14,15 @@ class SendBuffer(object):
 
     def to_sock(self, sock):
         if self.mark >= len(self.current):
-            try:
-                self.current = self.buf.get_nowait()
-                self.mark = 0
-            except Empty:
-                return
+            io = StringIO()
+            while True:
+                try:
+                    io.write(self.buf.get_nowait())
+                except Empty:
+                    break
+
+            self.current = io.getvalue()
+            io.close()
+            self.mark = 0
+
         self.mark += sock.send(self.current[self.mark:])
