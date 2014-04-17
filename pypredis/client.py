@@ -56,10 +56,7 @@ class BaseConnection(object):
 
     def pump_out(self):
         try:
-            data = self.buf.peek()
-            if data:
-                n = self.sock.send(data)
-                self.buf.written(n)
+            self.buf.to_sock(self.sock)
         except Exception as e:
             res = self.resq.popleft()
             res.set_exception(e)
