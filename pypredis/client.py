@@ -8,18 +8,21 @@ from collections import defaultdict, namedtuple, deque
 from threading import Thread
 import socket
 import os
+from cStringIO import StringIO
 
 #debug
 from time import sleep
 
 def pack_command(args):
-    "Pack a series of arguments into a value Redis command"
-    args_output = ''.join([
-        ''.join(('$', str(len(k)), '\r\n', k, '\r\n'))
-        for k in args])
-    output = ''.join(
-        ('*', str(len(args)), '\r\n', args_output))
-    return output
+    out = StringIO()
+    try:
+        out.write("*%d\r\n" % len(args))
+        for arg in args:
+            val = str(arg)
+            out.write("$%d\r\n%s\r\n" % (len(val), val))
+        return out.getvalue()
+    finally:
+        out.close()
 
 RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
