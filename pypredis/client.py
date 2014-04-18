@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from pypredis.future import Future
-from pypredis.reader import RedisReader
+from pypredis.reader import RedisReader, NoReply
 from pypredis.sendbuffer import SendBuffer
 from select import poll, POLLIN, POLLPRI, POLLOUT, POLLERR, POLLHUP, POLLNVAL
 from Queue import Queue, Empty
@@ -78,8 +78,9 @@ class BaseConnection(object):
                 if e.errno != 11:
                     raise
             while True:
-                reply = self.reader.get_reply()
-                if reply == False:
+                try:
+                    reply = self.reader.get_reply()
+                except NoReply:
                     break
                 res = self.resq.popleft()
                 res.set_result(reply)

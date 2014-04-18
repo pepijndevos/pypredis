@@ -35,6 +35,9 @@ hiredis = ffi.verify("""
 class HiredisError(Exception):
     pass
 
+class NoReply(HiredisError):
+    pass
+
 class RedisReader(object):
     "Hiredis wrapper"
 
@@ -91,5 +94,5 @@ class RedisReader(object):
             gc_reply = ffi.gc(reply, hiredis.freeReplyObject)
             return self.to_py(gc_reply)
         else:
-            return False
+            raise NoReply()
 
