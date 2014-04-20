@@ -28,14 +28,14 @@ RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
 
 class BaseConnection(object):
 
-    def __init__(self, buf_size=100, **connect_params):
+    def __init__(self, **params):
         self.sock = None
-        self.buf = SendBuffer(buf_size)
+        self.buf = SendBuffer(params.get('buf_size', 100))
         self.resq = deque()
         self.reader = RedisReader()
         self.pid = os.getpid()
-        self.connect_params = connect_params
-        self.connect(**connect_params)
+        self.params = params
+        self.connect(**params)
 
     @property
     def fd(self):
@@ -51,15 +51,16 @@ class BaseConnection(object):
             flags |= POLLPRI
         return flags
 
-    def checkpid(self):
+    def _checkpid(self):
         if self.pid != os.getpid():
             self.disconnect()
-            self.connect(**self.connect_params)
+            self.__init__(**self.params)
 
     def disconnect(self):
         self.sock.close()
 
     def write(self, cmd):
+        self._checkpid()
         self.resq.append(cmd.result)
         self.buf.write(cmd.command)
 
@@ -120,7 +121,6 @@ class EventLoop(Thread):
         return res
 
     def _register(self, conn):
-        conn.checkpid()
         self.poll.register(conn.fd, conn.flags)
         self.fd_index[conn.fd] = conn
 
@@ -137,7 +137,7 @@ class EventLoop(Thread):
                 conn.pump_in()
 
             if conn.flags:
-                self.poll.register(conn.fd, conn.flags)
+                self._register(conn)
             else:
                 self._unregister(conn)
 
