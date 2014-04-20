@@ -87,7 +87,7 @@ class RedisReader(object):
         reply_pointer = ffi.new("redisReply * *")
         res = hiredis.redisReaderGetReply(self.hiredis, reply_pointer)
         if res == self.REDIS_ERR:
-            raise RedisError("Error parsing")
+            raise HiredisError("Error parsing")
 
         reply = reply_pointer[0]
         if reply:
