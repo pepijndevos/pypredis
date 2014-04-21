@@ -139,14 +139,11 @@ class EventLoop(Thread):
             if e & (POLLIN | POLLPRI):
                 conn.pump_in()
 
-            if conn.flags:
-                self.poll.register(conn.fd, conn.flags)
-            else:
-                with conn.write_lock:
-                    if conn.flags:
-                        self.poll.register(conn.fd, conn.flags)
-                    else:
-                        self._unregister(conn)
+            with conn.write_lock:
+                if conn.flags:
+                    self.poll.register(conn.fd, conn.flags)
+                else:
+                    self._unregister(conn)
             #print conn.flags, len(conn.resq), conn.buf.count, conn.buf.buf.qsize()
 
     def run(self):
