@@ -33,6 +33,9 @@ class BaseConnection(object):
         self.reader = RedisReader()
         self.pid = os.getpid()
         self.params = params
+        # this lock protects buf and resq,
+        # so that flags do not change
+        # in the middle of things.
         self.write_lock = RLock()
         self.connect(**params)
 
@@ -109,6 +112,8 @@ class EventLoop(Thread):
         self.timeout = 0.1
         self.poll = poll()
         self.fd_index = {}
+        # This lock protects fd_index,
+        # so that it is in sync with the poll object
         self.poll_lock = RLock()
 
     def send_command(self, conn, *args):
@@ -139,11 +144,14 @@ class EventLoop(Thread):
             if e & (POLLIN | POLLPRI):
                 conn.pump_in()
 
-            with conn.write_lock:
+            if conn.write_lock.acquire(False):
                 if conn.flags:
                     self.poll.register(conn.fd, conn.flags)
                 else:
                     self._unregister(conn)
+                conn.write_lock.release()
+            else: # someone is writing
+                self.poll.register(conn.fd, POLLIN | POLLPRI | POLLOUT)
             #print conn.flags, len(conn.resq), conn.buf.count, conn.buf.buf.qsize()
 
     def run(self):

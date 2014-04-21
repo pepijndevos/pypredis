@@ -60,8 +60,8 @@ rc1.sadd('set2', *range(500, 1500))
 rc2.sadd('set1', *range(0, 1000))
 rc2.sadd('set2', *range(500, 1500))
 
-pc1 = pypredis.client.UnixConnection(path="/tmp/redis.0.sock", buf_size=None)
-pc2 = pypredis.client.UnixConnection(path="/tmp/redis.1.sock", buf_size=None)
+pc1 = pypredis.client.UnixConnection(path="/tmp/redis.0.sock")
+pc2 = pypredis.client.UnixConnection(path="/tmp/redis.1.sock")
 
 
 if __name__ == '__main__':
