@@ -11,42 +11,43 @@ def time():
     end = clock()
     print end - start
 
-BATCH = 100000
+PINGBATCH = 100000
+SETBATCH = 1000
 
-def test_redis_py_get(conn):
+def test_redis_py_ping(conn):
     pl = conn.pipeline()
-    for _ in xrange(BATCH):
-        pl.get('a')
+    for _ in xrange(PINGBATCH):
+        pl.ping()
 
     return pl.execute()
 
-def test_pypredis_get(*cons):
+def test_pypredis_ping(*cons):
     el  = pypredis.client.EventLoop()
     el.start()
     results = []
-    for _ in xrange(BATCH):
+    for _ in xrange(PINGBATCH/len(cons)):
         for c in cons:
             results.append(
-                el.send_command(c, "GET", "a")
+                el.send_command(c, "PING")
             )
 
     return [r.result(10) for r in results]
 
-def test_redis_py_sinter(conn):
+def test_redis_py_sunion(conn):
     pl = conn.pipeline()
-    for _ in xrange(BATCH):
-        pl.sinter('set1', 'set2')
+    for _ in xrange(SETBATCH):
+        pl.sunion('set1', 'set2')
 
     return pl.execute()
 
-def test_pypredis_sinter(*cons):
+def test_pypredis_sunion(*cons):
     el  = pypredis.client.EventLoop()
     el.start()
     results = []
-    for _ in xrange(BATCH/len(cons)):
+    for _ in xrange(SETBATCH/len(cons)):
         for c in cons:
             results.append(
-                el.send_command(c, "SINTER", "set1", "set2")
+                el.send_command(c, "SUNION", "set1", "set2")
             )
 
     return [r.result(10) for r in results]
@@ -54,29 +55,35 @@ def test_pypredis_sinter(*cons):
 rc1 = redis.StrictRedis(unix_socket_path="/tmp/redis.0.sock")
 rc2 = redis.StrictRedis(unix_socket_path="/tmp/redis.1.sock")
 
-rc1.set('a', '1')
-rc2.set('a', '2')
+rc1.sadd('set1', *range(0, 1000))
+rc1.sadd('set2', *range(500, 1500))
+rc2.sadd('set1', *range(0, 1000))
+rc2.sadd('set2', *range(500, 1500))
 
-rc1.sadd('set1', *range(1, 50))
-rc1.sadd('set2', *range(30, 70))
-rc2.sadd('set1', *range(1, 50))
-rc2.sadd('set2', *range(30, 70))
-
-pc1 = pypredis.client.UnixConnection(path="/tmp/redis.0.sock")
-pc2 = pypredis.client.UnixConnection(path="/tmp/redis.1.sock")
+pc1 = pypredis.client.UnixConnection(path="/tmp/redis.0.sock", buf_size=None)
+pc2 = pypredis.client.UnixConnection(path="/tmp/redis.1.sock", buf_size=None)
 
 
 if __name__ == '__main__':
-    print("pypredis get")
+    print("pypredis ping")
     with time():
-        test_pypredis_get(pc1, pc2)
-    print("redis-py get")
+        pypres = test_pypredis_ping(pc1, pc2)
+    print("redis-py ping")
     with time():
-        test_redis_py_get(rc1)
+        rpyres = test_redis_py_ping(rc1)
 
-    print("pypredis sinter")
+    assert len(pypres) == PINGBATCH
+    assert len(rpyres) == PINGBATCH
+    assert all(rpyres)
+    assert all(r == 'PONG' for r in pypres)
+
+    print("pypredis sunion")
     with time():
-        test_pypredis_get(pc1, pc2)
-    print("redis-py sinter")
+        pypres = test_pypredis_sunion(pc1, pc2)
+    print("redis-py sunion")
     with time():
-        test_redis_py_sinter(rc1)
+        rpyres = test_redis_py_sunion(rc1)
+
+    assert len(pypres) == SETBATCH
+    assert len(rpyres) == SETBATCH
+    assert set(pypres[0]) == rpyres[0]
