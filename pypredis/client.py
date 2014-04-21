@@ -5,7 +5,7 @@ from pypredis.sendbuffer import SendBuffer
 from select import poll, POLLIN, POLLPRI, POLLOUT, POLLERR, POLLHUP, POLLNVAL
 from Queue import Queue, Empty
 from collections import defaultdict, namedtuple, deque
-from threading import Thread
+from threading import Thread, RLock
 import socket
 import os
 from cStringIO import StringIO
@@ -33,6 +33,7 @@ class BaseConnection(object):
         self.reader = RedisReader()
         self.pid = os.getpid()
         self.params = params
+        self.write_lock = RLock()
         self.connect(**params)
 
     @property
@@ -108,36 +109,49 @@ class EventLoop(Thread):
         self.timeout = 0.1
         self.poll = poll()
         self.fd_index = {}
+        self.poll_lock = RLock()
 
     def send_command(self, conn, *args):
         cmdstr = pack_command(args)
         res = Future()
-        conn.write(res, cmdstr)
-        self._register(conn)
+        with conn.write_lock:
+            conn.write(res, cmdstr)
+            self._register(conn)
         return res
 
     def _register(self, conn):
-        self.fd_index[conn.fd] = conn
-        self.poll.register(conn.fd, conn.flags)
+        # in the common case, don't wait for the lock
+        if conn.fd not in self.fd_index:
+            with self.poll_lock:
+                if conn.fd not in self.fd_index:
+                    self.fd_index[conn.fd] = conn
+                    self.poll.register(conn.fd, conn.flags)
 
     def _unregister(self, conn):
-        self.poll.unregister(conn.fd)
-        del self.fd_index[conn.fd]
+        with self.poll_lock:
+            self.poll.unregister(conn.fd)
+            del self.fd_index[conn.fd]
 
     def _handle_events(self, events):
-        for fd, e in events:
-            conn = self.fd_index[fd]
+        for conn, e in events:
             if e & POLLOUT:
                 conn.pump_out()
             if e & (POLLIN | POLLPRI):
                 conn.pump_in()
 
             if conn.flags:
-                self._register(conn)
+                self.poll.register(conn.fd, conn.flags)
             else:
-                self._unregister(conn)
+                with conn.write_lock:
+                    if conn.flags:
+                        self.poll.register(conn.fd, conn.flags)
+                    else:
+                        self._unregister(conn)
+            #print conn.flags, len(conn.resq), conn.buf.count, conn.buf.buf.qsize()
 
     def run(self):
         while True:
-            events = self.poll.poll(self.timeout)
-            self._handle_events(events)
+            with self.poll_lock:
+                events = self.poll.poll(self.timeout)
+                conns = [(self.fd_index[fd], e) for fd, e in events]
+            self._handle_events(conns)
