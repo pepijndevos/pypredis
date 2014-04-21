@@ -24,8 +24,6 @@ def pack_command(args):
     finally:
         out.close()
 
-RedisCommand = namedtuple("RedisCommand", ["result", "connection", "command"])
-
 class BaseConnection(object):
 
     def __init__(self, **params):
@@ -59,10 +57,10 @@ class BaseConnection(object):
     def disconnect(self):
         self.sock.close()
 
-    def write(self, cmd):
+    def write(self, res, cmd):
         self._checkpid()
-        self.resq.append(cmd.result)
-        self.buf.write(cmd.command)
+        self.resq.append(res)
+        self.buf.write(cmd)
 
     def pump_out(self):
         try:
@@ -89,14 +87,14 @@ class BaseConnection(object):
 
 class UnixConnection(BaseConnection):
 
-    def connect(self, path):
+    def connect(self, path, **params):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(path)
         self.sock.setblocking(0)
 
 class TCPConnection(BaseConnection):
 
-    def connect(self, host='localhost', port=6379):
+    def connect(self, host='localhost', port=6379, **params):
         self.sock = socket.create_connection((host, port))
         self.sock.setblocking(0)
 
@@ -114,15 +112,13 @@ class EventLoop(Thread):
     def send_command(self, conn, *args):
         cmdstr = pack_command(args)
         res = Future()
-        cmd = RedisCommand(res, conn, cmdstr)
-        conn.write(cmd)
-        self.queue.put(cmd)
-        cmd = None
+        conn.write(res, cmdstr)
+        self._register(conn)
         return res
 
     def _register(self, conn):
-        self.poll.register(conn.fd, conn.flags)
         self.fd_index[conn.fd] = conn
+        self.poll.register(conn.fd, conn.flags)
 
     def _unregister(self, conn):
         self.poll.unregister(conn.fd)
@@ -143,13 +139,5 @@ class EventLoop(Thread):
 
     def run(self):
         while True:
-            while True:
-                try:
-                    cmd = self.queue.get_nowait()
-                    self._register(cmd.connection)
-                    cmd = None
-                except Empty:
-                    break # only inner
-
             events = self.poll.poll(self.timeout)
             self._handle_events(events)
