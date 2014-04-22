@@ -76,8 +76,13 @@ class BaseConnection(object):
     
     def pump_in(self):
         try:
-            data = self.sock.recv(4096)
-            self.reader.feed(data)
+            try:
+                while True:
+                    data = self.sock.recv(4096)
+                    self.reader.feed(data)
+            except socket.error as e:
+                if e.errno != 11:
+                    raise
             while True:
                 try:
                     reply = self.reader.get_reply()
