@@ -23,15 +23,18 @@ def test_redis_py_ping(conn):
 
 def test_pypredis_ping(*cons):
     el  = pypredis.client.EventLoop()
-    el.start()
-    results = []
-    for _ in xrange(PINGBATCH/len(cons)):
-        for c in cons:
-            results.append(
-                el.send_command(c, "PING")
-            )
+    try:
+        el.start()
+        results = []
+        for _ in xrange(PINGBATCH/len(cons)):
+            for c in cons:
+                results.append(
+                    el.send_command(c, "PING")
+                )
 
-    return [r.result(10) for r in results]
+        return [r.result(10) for r in results]
+    finally:
+        el.stop()
 
 def test_redis_py_sunion(conn):
     pl = conn.pipeline()
@@ -42,15 +45,18 @@ def test_redis_py_sunion(conn):
 
 def test_pypredis_sunion(*cons):
     el  = pypredis.client.EventLoop()
-    el.start()
-    results = []
-    for _ in xrange(SETBATCH/len(cons)):
-        for c in cons:
-            results.append(
-                el.send_command(c, "SUNION", "set1", "set2")
-            )
+    try:
+        el.start()
+        results = []
+        for _ in xrange(SETBATCH/len(cons)):
+            for c in cons:
+                results.append(
+                    el.send_command(c, "SUNION", "set1", "set2")
+                )
 
-    return [r.result(10) for r in results]
+        return [r.result(10) for r in results]
+    finally:
+        el.stop()
 
 rc1 = redis.StrictRedis(unix_socket_path="/tmp/redis.0.sock")
 rc2 = redis.StrictRedis(unix_socket_path="/tmp/redis.1.sock")

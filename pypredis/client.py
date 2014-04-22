@@ -11,9 +11,6 @@ import socket
 import os
 import errno
 
-#debug
-from time import sleep
-
 def pack_command(args):
     out = StringIO()
     try:
@@ -117,10 +114,14 @@ class EventLoop(Thread):
         self.queue = Queue()
         self.timeout = 0.1
         self.poll = poll()
+        self.readpipe, self.writepipe = os.pipe()
         self.fd_index = {}
         # This lock protects fd_index,
         # so that it is in sync with the poll object
         self.poll_lock = RLock()
+
+    def stop(self):
+        os.write(self.writepipe, "stop")
 
     def send_command(self, conn, *args):
         cmdstr = pack_command(args)
@@ -161,8 +162,16 @@ class EventLoop(Thread):
             #print conn.flags, len(conn.resq), conn.buf.count, conn.buf.buf.qsize()
 
     def run(self):
+        # this pipe serves to stop the thread
+        # but also to make sure the poll object is never empty.
+        # an empty poll seems to return immeditately.
+        self.poll.register(self.readpipe, POLLIN | POLLPRI)
         while True:
             with self.poll_lock:
                 events = self.poll.poll(self.timeout)
-                conns = [(self.fd_index[fd], e) for fd, e in events]
+                conns = []
+                for fd, e in events:
+                    if fd == self.readpipe:
+                        return
+                    conns.append((self.fd_index[fd], e))
             self._handle_events(conns)
