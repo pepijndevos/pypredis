@@ -6,9 +6,10 @@ from select import poll, POLLIN, POLLPRI, POLLOUT, POLLERR, POLLHUP, POLLNVAL
 from Queue import Queue, Empty
 from collections import defaultdict, namedtuple, deque
 from threading import Thread, RLock
+from cStringIO import StringIO
 import socket
 import os
-from cStringIO import StringIO
+import errno
 
 #debug
 from time import sleep
@@ -81,7 +82,7 @@ class BaseConnection(object):
                     data = self.sock.recv(4096)
                     self.reader.feed(data)
             except socket.error as e:
-                if e.errno != 11:
+                if e.errno != errno.EWOULDBLOCK and e.errno != errno.EAGAIN:
                     raise
             while True:
                 try:
