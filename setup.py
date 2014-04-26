@@ -18,7 +18,7 @@ class CFFIInstall(install):
         install.finalize_options(self)
 
 setup(name='pypredis',
-      version='0.2',
+      version='0.3',
       description='A heavy-duty Redis client',
       author='Pepij de Vos',
       author_email='pepijndevos@gmail.com',
