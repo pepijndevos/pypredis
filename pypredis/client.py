@@ -25,8 +25,9 @@ def pack_command(args):
 class BaseConnection(object):
 
     def __init__(self, **params):
-        self.sock = None
-        self.buf = SendBuffer(params.get('buf_size', 100))
+        self.connect(**params)
+        bufsize = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+        self.buf = SendBuffer(bufsize)
         self.resq = deque()
         self.reader = RedisReader()
         self.pid = os.getpid()
@@ -35,7 +36,6 @@ class BaseConnection(object):
         # so that flags do not change
         # in the middle of things.
         self.write_lock = RLock()
-        self.connect(**params)
 
     @property
     def fd(self):
@@ -74,9 +74,10 @@ class BaseConnection(object):
     
     def pump_in(self):
         try:
+            bufsize = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
             try:
                 while True:
-                    data = self.sock.recv(4096)
+                    data = self.sock.recv(bufsize)
                     self.reader.feed(data)
             except socket.error as e:
                 if e.errno != errno.EWOULDBLOCK and e.errno != errno.EAGAIN:
@@ -112,7 +113,7 @@ class EventLoop(Thread):
         Thread.__init__(self)
         self.daemon = True
         self.queue = Queue()
-        self.timeout = 0.1
+        self.timeout = 1
         self.poll = poll()
         self.readpipe, self.writepipe = os.pipe()
         self.fd_index = {}
