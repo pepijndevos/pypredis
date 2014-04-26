@@ -117,9 +117,6 @@ class EventLoop(Thread):
         self.poll = poll()
         self.readpipe, self.writepipe = os.pipe()
         self.fd_index = {}
-        # This lock protects fd_index,
-        # so that it is in sync with the poll object
-        self.poll_lock = RLock()
 
     def stop(self):
         os.write(self.writepipe, "stop")
@@ -133,17 +130,13 @@ class EventLoop(Thread):
         return res
 
     def _register(self, conn):
-        # in the common case, don't wait for the lock
         if conn.fd not in self.fd_index:
-            with self.poll_lock:
-                if conn.fd not in self.fd_index:
-                    self.fd_index[conn.fd] = conn
-                    self.poll.register(conn.fd, conn.flags)
+            self.fd_index[conn.fd] = conn
+            self.poll.register(conn.fd, conn.flags)
 
     def _unregister(self, conn):
-        with self.poll_lock:
-            self.poll.unregister(conn.fd)
-            del self.fd_index[conn.fd]
+        self.poll.unregister(conn.fd)
+        del self.fd_index[conn.fd]
 
     def _handle_events(self, events):
         for conn, e in events:
@@ -168,11 +161,10 @@ class EventLoop(Thread):
         # an empty poll seems to return immeditately.
         self.poll.register(self.readpipe, POLLIN | POLLPRI)
         while True:
-            with self.poll_lock:
-                events = self.poll.poll(self.timeout)
-                conns = []
-                for fd, e in events:
-                    if fd == self.readpipe:
-                        return
-                    conns.append((self.fd_index[fd], e))
+            events = self.poll.poll(self.timeout)
+            conns = []
+            for fd, e in events:
+                if fd == self.readpipe:
+                    return
+                conns.append((self.fd_index[fd], e))
             self._handle_events(conns)
