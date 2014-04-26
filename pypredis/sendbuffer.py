@@ -32,6 +32,4 @@ class SendBuffer(object):
             self.frontbuffer = buf.getvalue()
 
         written = sock.send(self.frontbuffer)
-        if written < len(self.frontbuffer):
-            print written, '/', len(self.frontbuffer)
         self.frontbuffer = self.frontbuffer[written:]
