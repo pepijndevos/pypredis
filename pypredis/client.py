@@ -76,9 +76,8 @@ class BaseConnection(object):
         try:
             bufsize = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
             try:
-                while True:
-                    data = self.sock.recv(bufsize)
-                    self.reader.feed(data)
+                data = self.sock.recv(bufsize)
+                self.reader.feed(data)
             except socket.error as e:
                 if e.errno != errno.EWOULDBLOCK and e.errno != errno.EAGAIN:
                     raise
@@ -120,6 +119,7 @@ class EventLoop(Thread):
 
     def stop(self):
         os.write(self.writepipe, "stop")
+        self.join()
 
     def send_command(self, conn, *args):
         cmdstr = pack_command(args)
