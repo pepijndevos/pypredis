@@ -88,6 +88,7 @@ class BaseConnection(object):
                     break
                 res = self.resq.popleft()
                 res.set_result(reply)
+            Future.notify()
         except Exception as e:
             res = self.resq.popleft()
             res.set_exception(e)
